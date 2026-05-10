@@ -1,4 +1,4 @@
-# Dirty-Frag-hunting# Dirty-Frag-hunting
+# Dirty-Frag-hunting
 
 Detection and hunting tools for **CVE-2026-43284** (xfrm-ESP) and **CVE-2026-43500** (RxRPC) the DirtyFrag Linux LPE vulnerability class.
 
