@@ -1,6 +1,6 @@
 # Dirty-Frag-hunting# Dirty-Frag-hunting
 
-Detection and hunting tools for **CVE-2026-43284** (xfrm-ESP) and **CVE-2026-43500** (RxRPC) — the DirtyFrag Linux LPE vulnerability class.
+Detection and hunting tools for **CVE-2026-43284** (xfrm-ESP) and **CVE-2026-43500** (RxRPC) the DirtyFrag Linux LPE vulnerability class.
 
 > **Scope:** Purple team / detection engineering. These tools check exposure and hunt for exploitation indicators. They do not exploit anything.
 
@@ -15,7 +15,7 @@ Technical write-up: [blacksunCUBE](https://0xallow.github.io/public/dirtyfrag-ne
 |---|---|
 | `dirtyfrag_hunt.py` | Exposure checker + `/proc` inspection + auditd hunting |
 | `dirtyfrag.yml` | Sigma rules (6 rules) for auditd / SIEM |
-| `dirtyfrag.yar` | YARA rules (5 rules) — source, binary, memory, tamper detection |
+| `dirtyfrag.yar` | YARA rules (5 rules) source, binary, memory, tamper detection |
 
 ---
 
@@ -50,10 +50,10 @@ yara dirtyfrag.yar /proc/<pid>/mem
 
 | CVE | Subsystem | Primitive | Priv req. | Patch |
 |---|---|---|---|---|
-| CVE-2026-43284 | xfrm (IPsec ESP) | 4-byte write into page cache | CLONE_NEWUSER | mainline: `f4c50a4034e6` — no distro backport |
+| CVE-2026-43284 | xfrm (IPsec ESP) | 4-byte write into page cache | CLONE_NEWUSER | mainline: `f4c50a4034e6` no distro backport |
 | CVE-2026-43500 | RxRPC (AFS transport) | page-cache write | none | **no patch anywhere** |
 
-Both are deterministic logic bugs — no race condition, no kernel panic on failure.
+Both are deterministic logic bugs no race condition, no kernel panic on failure.
 
 **xfrm window:** `cac2661c53f3` (2017-01-17) → unpatched on all distros  
 **rxrpc window:** `2dc334f1a63a` (2023-06) → unpatched everywhere (2026-05-10)
@@ -74,7 +74,7 @@ unshare(CLONE_NEWUSER)
               → su root ✓
 ```
 
-**CVE-2026-43500** — same sink, no namespace required.  
+**CVE-2026-43500** same sink, no namespace required.  
 Triggers via `rxrpc_recvmsg()` if `rxrpc.ko` is loaded (Ubuntu default).
 
 ---
@@ -90,7 +90,7 @@ Side effects: disables IPsec ESP transport (esp4/esp6) and AFS/RxRPC (rxrpc).
 
 ---
 
-## dirtyfrag_hunt.py — checks
+## dirtyfrag_hunt.py checks
 
 | Check | CVE | What it detects |
 |---|---|---|
@@ -102,11 +102,11 @@ Side effects: disables IPsec ESP transport (esp4/esp6) and AFS/RxRPC (rxrpc).
 | `proc-hunt` | BOTH | Active xfrm policies, rxrpc in `/proc/net/protocols`, xfrm_stat counters |
 | `auditd-hunt` | BOTH | Recent unshare / AF_KEY socket / `/etc/passwd` write events (root) |
 
-Exit code `1` if any finding is `VULN` — suitable for monitoring pipelines.
+Exit code `1` if any finding is `VULN` suitable for monitoring pipelines.
 
 ---
 
-## dirtyfrag.yml — Sigma rules
+## dirtyfrag.yml Sigma rules
 
 | Rule | Title | Level |
 |---|---|---|
@@ -119,7 +119,7 @@ Exit code `1` if any finding is `VULN` — suitable for monitoring pipelines.
 
 ---
 
-## dirtyfrag.yar — YARA rules
+## dirtyfrag.yar YARA rules
 
 | Rule | Scope | What it matches |
 |---|---|---|
@@ -133,11 +133,11 @@ Exit code `1` if any finding is `VULN` — suitable for monitoring pipelines.
 
 ## References
 
-- [V4bel/dirtyfrag](https://github.com/V4bel/dirtyfrag) — original PoC and write-up
-- [oss-security disclosure](https://www.openwall.com/lists/oss-security/2026/05/07/8) — 2026-05-07
-- CVE-2026-43284 — xfrm-ESP · patch: `f4c50a4034e6` (mainline only)
-- CVE-2026-43500 — RxRPC · reserved · no patch (2026-05-10)
-- [Dirty Pipe (CVE-2022-0847)](https://dirtypipe.cm4all.com/) — bug class ancestor
-- [Copy Fail](https://copy.fail/) — same xfrm sink, earlier variant
+- [V4bel/dirtyfrag](https://github.com/V4bel/dirtyfrag) original PoC and write-up
+- [oss-security disclosure](https://www.openwall.com/lists/oss-security/2026/05/07/8) 2026-05-07
+- CVE-2026-43284 xfrm-ESP · patch: `f4c50a4034e6` (mainline only)
+- CVE-2026-43500 RxRPC · reserved · no patch (2026-05-10)
+- [Dirty Pipe (CVE-2022-0847)](https://dirtypipe.cm4all.com/) bug class ancestor
+- [Copy Fail](https://copy.fail/) same xfrm sink, earlier variant
 - xfrm vulnerable commit: `cac2661c53f3` (2017-01-17)
 - rxrpc vulnerable commit: `2dc334f1a63a` (2023-06)
