@@ -1,0 +1,345 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# DirtyFrag Sigma Detection Rules
+# CVE-2026-43284 (xfrm-ESP) + CVE-2026-43500 (RxRPC)
+#
+# Author  : blacksunCUBE (0xAllow)
+# Date    : 2026-05-10
+# Repo    : https://github.com/0xAllow/Dirty-Frag-hunting
+# Ref     : https://github.com/V4bel/dirtyfrag
+#
+# Usage   : sigma convert -t splunk dirtyfrag.yml
+#           sigma convert -t elastic dirtyfrag.yml
+#           sigma convert -t qradar  dirtyfrag.yml
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+# ── Rule 1 ────────────────────────────────────────────────────────────────────
+# Unprivileged user namespace creation — xfrm-ESP trigger precondition
+# (CVE-2026-43284)
+# An unprivileged process calling unshare(CLONE_NEWUSER) is the mandatory
+# first step for the xfrm path. Legitimate uses: container runtimes running
+# as root, bubblewrap, Flatpak — tune allowlist accordingly.
+# ─────────────────────────────────────────────────────────────────────────────
+title: DirtyFrag - Unprivileged User Namespace Creation
+id: a1b2c3d4-0001-4e5f-8a9b-dirtyfrag0001
+status: experimental
+description: >
+  Detects unshare(CLONE_NEWUSER) called by an unprivileged process.
+  This is the mandatory precondition for triggering the xfrm-ESP
+  page-cache write primitive (CVE-2026-43284). Correlate with subsequent
+  AF_KEY socket creation and /etc/passwd writes for high-confidence detection.
+references:
+  - https://github.com/V4bel/dirtyfrag
+  - https://www.openwall.com/lists/oss-security/2026/05/07/8
+author: blacksunCUBE
+date: 2026-05-10
+tags:
+  - attack.privilege_escalation
+  - attack.t1611
+  - cve.2026-43284
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: SYSCALL
+    syscall: unshare
+    # CLONE_NEWUSER = 0x10000000 — auditd logs a0 as hex
+    a0|contains: '10000000'
+  filter_root:
+    uid: '0'
+  filter_containers:
+    # Common legitimate callers — tune to your environment
+    exe|endswith:
+      - '/newuidmap'
+      - '/newgidmap'
+      - '/bwrap'
+      - '/flatpak'
+      - '/runc'
+      - '/crun'
+  condition: selection and not filter_root and not filter_containers
+falsepositives:
+  - Flatpak / bubblewrap sandbox creation
+  - Unprivileged container runtimes (Podman rootless)
+  - Firefox / Chrome sandboxing
+level: medium
+fields:
+  - uid
+  - auid
+  - exe
+  - pid
+  - ppid
+  - comm
+
+---
+
+# ── Rule 2 ────────────────────────────────────────────────────────────────────
+# AF_KEY socket creation from unprivileged user — xfrm SA setup
+# (CVE-2026-43284)
+# After creating a user namespace, the attacker opens an AF_KEY socket to
+# configure an IPsec Security Association. AF_KEY = 15 (decimal).
+# ─────────────────────────────────────────────────────────────────────────────
+title: DirtyFrag - AF_KEY Socket Created by Unprivileged Process
+id: a1b2c3d4-0002-4e5f-8a9b-dirtyfrag0002
+status: experimental
+description: >
+  Detects socket(AF_KEY, ...) called by a non-root process. AF_KEY sockets
+  are used to configure IPsec Security Associations. Combined with
+  unshare(CLONE_NEWUSER), this is the xfrm-ESP exploitation path
+  (CVE-2026-43284). Standalone, AF_KEY usage by root is legitimate
+  (VPN daemons, strongSwan, libreswan).
+references:
+  - https://github.com/V4bel/dirtyfrag
+author: blacksunCUBE
+date: 2026-05-10
+tags:
+  - attack.privilege_escalation
+  - attack.t1611
+  - cve.2026-43284
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: SYSCALL
+    syscall: socket
+    # a0=0xf = AF_KEY (decimal 15)
+    a0: 'f'
+  filter_vpn_daemons:
+    uid: '0'
+    exe|endswith:
+      - '/charon'        # strongSwan
+      - '/pluto'         # libreswan
+      - '/racoon'        # racoon IKE
+      - '/iked'
+  condition: selection and not filter_vpn_daemons
+falsepositives:
+  - VPN daemon startup as non-root (rare)
+  - Security research in isolated VMs
+level: high
+fields:
+  - uid
+  - auid
+  - exe
+  - pid
+  - comm
+
+---
+
+# ── Rule 3 ────────────────────────────────────────────────────────────────────
+# AF_RXRPC socket creation — RxRPC trigger precondition
+# (CVE-2026-43500)
+# Any unprivileged user can open an AF_RXRPC socket if rxrpc.ko is loaded.
+# AF_RXRPC = 35 (decimal). On non-AFS environments this should never appear.
+# ─────────────────────────────────────────────────────────────────────────────
+title: DirtyFrag - AF_RXRPC Socket Created (Unexpected)
+id: a1b2c3d4-0003-4e5f-8a9b-dirtyfrag0003
+status: experimental
+description: >
+  Detects socket(AF_RXRPC, ...) on systems that do not use AFS.
+  The rxrpc subsystem is the exploitation vector for CVE-2026-43500,
+  which requires no namespace privileges. On Ubuntu, rxrpc.ko is loaded
+  by default, making this the primary attack path on hardened systems.
+  In most enterprise environments, AF_RXRPC traffic is unexpected.
+references:
+  - https://github.com/V4bel/dirtyfrag
+author: blacksunCUBE
+date: 2026-05-10
+tags:
+  - attack.privilege_escalation
+  - attack.t1611
+  - cve.2026-43500
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: SYSCALL
+    syscall: socket
+    # a0=0x23 = AF_RXRPC (decimal 35)
+    a0: '23'
+  filter_afs:
+    # Legitimate AFS client processes — rare in enterprise
+    exe|endswith:
+      - '/afsd'
+      - '/afs-client'
+  condition: selection and not filter_afs
+falsepositives:
+  - OpenAFS client daemon (afsd) — legitimate if AFS is deployed
+level: high
+fields:
+  - uid
+  - auid
+  - exe
+  - pid
+  - comm
+
+---
+
+# ── Rule 4 ────────────────────────────────────────────────────────────────────
+# Write to /etc/passwd or /etc/shadow by non-root process
+# Post-exploitation — page-cache write has been committed
+# ─────────────────────────────────────────────────────────────────────────────
+title: DirtyFrag - Suspicious Write to /etc/passwd or /etc/shadow
+id: a1b2c3d4-0004-4e5f-8a9b-dirtyfrag0004
+status: stable
+description: >
+  Detects file write access to /etc/passwd or /etc/shadow by a process
+  not running as root. This is the typical post-exploitation step in
+  DirtyFrag: the page-cache write primitive overwrites the root password
+  hash, then the attacker runs 'su root' with the known hash.
+  High-fidelity rule — very few legitimate processes write these files
+  as non-root.
+references:
+  - https://github.com/V4bel/dirtyfrag
+author: blacksunCUBE
+date: 2026-05-10
+tags:
+  - attack.privilege_escalation
+  - attack.t1548
+  - attack.credential_access
+  - attack.t1003.008
+  - cve.2026-43284
+  - cve.2026-43500
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: PATH
+    name|endswith:
+      - '/etc/passwd'
+      - '/etc/shadow'
+    nametype: NORMAL
+    # write or append permission check
+    mode|contains: 'W'
+  filter_root:
+    uid: '0'
+  filter_legitimate:
+    exe|endswith:
+      - '/passwd'     # passwd utility (runs SUID as root, but listed for clarity)
+      - '/chpasswd'
+      - '/useradd'
+      - '/usermod'
+      - '/userdel'
+      - '/shadow'
+  condition: selection and not filter_root and not filter_legitimate
+falsepositives:
+  - Unusual but possible: configuration management tools running as non-root
+level: critical
+fields:
+  - uid
+  - auid
+  - exe
+  - pid
+  - name
+
+---
+
+# ── Rule 5 ────────────────────────────────────────────────────────────────────
+# DirtyFrag full chain correlation — HIGH CONFIDENCE
+# Unshare + AF_KEY/AF_RXRPC + /etc/passwd write — same process or session
+# ─────────────────────────────────────────────────────────────────────────────
+title: DirtyFrag - Full Exploitation Chain Correlation
+id: a1b2c3d4-0005-4e5f-8a9b-dirtyfrag0005
+status: experimental
+description: >
+  Correlates the three-step DirtyFrag exploitation chain within a single
+  audit session or short time window:
+    1. unshare(CLONE_NEWUSER) or AF_RXRPC socket by unprivileged user
+    2. AF_KEY or AF_RXRPC socket interaction
+    3. Write to /etc/passwd or /etc/shadow
+  This correlation has extremely low false-positive rate.
+  Requires a SIEM capable of event correlation (Splunk, Elastic, QRadar).
+references:
+  - https://github.com/V4bel/dirtyfrag
+author: blacksunCUBE
+date: 2026-05-10
+tags:
+  - attack.privilege_escalation
+  - attack.t1611
+  - cve.2026-43284
+  - cve.2026-43500
+logsource:
+  product: linux
+  service: auditd
+detection:
+  # NOTE: This rule requires SIEM-level temporal correlation.
+  # Implement as a correlation search across rules 1-4 above.
+  # Example Splunk pseudo-correlation:
+  #
+  #   index=linux_audit (rule_id=dirtyfrag0001 OR rule_id=dirtyfrag0002 OR rule_id=dirtyfrag0003)
+  #   | join auid [ search index=linux_audit rule_id=dirtyfrag0004 ]
+  #   | where abs(_time - join_time) < 300
+  #   | stats count by auid, host
+  #
+  # Elastic EQL equivalent:
+  #   sequence by process.user.name with maxspan=5m
+  #     [process where event.action == "executed" and process.name == "unshare"]
+  #     [network where network.type == "AF_KEY" or network.type == "AF_RXRPC"]
+  #     [file where file.path in ("/etc/passwd", "/etc/shadow") and file.action == "write"]
+  selection_placeholder:
+    # Placeholder — implement as SIEM correlation across rules 0001-0004
+    type: SYSCALL
+    key: 'dirtyfrag_userns'
+  condition: selection_placeholder
+falsepositives:
+  - Near zero when all three events correlate within 5 minutes for the same user
+level: critical
+fields:
+  - auid
+  - uid
+  - exe
+  - pid
+  - host
+
+---
+
+# ── Rule 6 ────────────────────────────────────────────────────────────────────
+# Unexpected kernel module load: rxrpc, esp4, esp6 via modprobe/insmod
+# ─────────────────────────────────────────────────────────────────────────────
+title: DirtyFrag - Vulnerable Module Loaded at Runtime
+id: a1b2c3d4-0006-4e5f-8a9b-dirtyfrag0006
+status: experimental
+description: >
+  Detects runtime loading of esp4, esp6, or rxrpc kernel modules via
+  modprobe or insmod on systems where the dirtyfrag.conf blacklist
+  should be preventing this. If your mitigation is in place and these
+  modules appear, the blacklist may have been tampered with.
+references:
+  - https://github.com/V4bel/dirtyfrag
+author: blacksunCUBE
+date: 2026-05-10
+tags:
+  - attack.defense_evasion
+  - attack.t1547
+  - cve.2026-43284
+  - cve.2026-43500
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection_exec:
+    type: EXECVE
+    exe|endswith:
+      - '/modprobe'
+      - '/insmod'
+  selection_module:
+    a1|endswith:
+      - 'esp4'
+      - 'esp6'
+      - 'rxrpc'
+      - 'esp4.ko'
+      - 'esp6.ko'
+      - 'rxrpc.ko'
+  condition: selection_exec and selection_module
+falsepositives:
+  - Legitimate VPN or AFS setup on systems without the mitigation applied
+  - System administrator explicitly loading modules for legitimate use
+level: high
+fields:
+  - uid
+  - exe
+  - a0
+  - a1
+  - pid
