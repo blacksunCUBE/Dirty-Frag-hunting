@@ -2,7 +2,7 @@
  * dirtyfrag.yar — YARA Detection Rules
  * CVE-2026-43284 (xfrm-ESP) + CVE-2026-43500 (RxRPC)
  *
- * Author  : blacksunCUBE (0xAllow)
+ * Author  : blacksunCUBE 
  * Date    : 2026-05-10
  * Repo    : https://github.com/0xAllow/Dirty-Frag-hunting
  * Ref     : https://github.com/V4bel/dirtyfrag
