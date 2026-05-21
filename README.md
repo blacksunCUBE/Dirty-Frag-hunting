@@ -5,7 +5,6 @@ Detection and hunting tools for **CVE-2026-43284** (xfrm-ESP) and **CVE-2026-435
 > **Scope:** Purple team / detection engineering. These tools check exposure and hunt for exploitation indicators. They do not exploit anything.
 
 Original research: [Hyunwoo Kim (@v4bel)](https://github.com/V4bel/dirtyfrag)  
-Technical write-up: [blacksunCUBE](https://0xallow.github.io/public/dirtyfrag-news.html)
 
 ---
 
