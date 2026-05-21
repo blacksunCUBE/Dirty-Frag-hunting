@@ -7,9 +7,9 @@ Purpose : Purple team / detection engineering.
           Checks system exposure and hunts for exploitation indicators.
           No external dependencies beyond Python 3.6+ stdlib.
 
-Author  : blacksunCUBE (0xAllow)
+Author  : blacksunCUBE 
 Date    : 2026-05-10
-Repo    : https://github.com/0xAllow/Dirty-Frag-hunting
+Repo    : https://github.com/blacksunCUBE/Dirty-Frag-hunting
 
 Usage:
     python3 dirtyfrag_hunt.py              # basic check (no root needed)
