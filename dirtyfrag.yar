@@ -4,7 +4,7 @@
  *
  * Author  : blacksunCUBE 
  * Date    : 2026-05-10
- * Repo    : https://github.com/0xAllow/Dirty-Frag-hunting
+ * Repo    : https://github.com/blacksunCUBE/Dirty-Frag-hunting
  * Ref     : https://github.com/V4bel/dirtyfrag
  *
  * Usage:
